@@ -33,71 +33,72 @@ class Game:
     # Initial conditions to determine number of castles to bet on and
     # number of betting "chips" or soldiers
     def __init__(self):
+        # Set the number of soldiers available and number of castles to be fought for
+        # Available data set from 538 github has 100 soldiers for 10 castles
         self.numCastles = 10
         self.numSoldiers = 100
 
+        # Read in data set
         self.fp = FileParser("castle-solutions.csv", self)
         self.fp.readFile()
-        #self.dataSetPlus = [selection for selection in self.fp.playerSelections]
-        #self.dataSetPlus = [self.updateRandom() for i in range(len(self.fp.playerSelections))]
-        self.dataSetPlus = []
 
+        # Create a new data set that can be manipulated by adding in more data points
+        self.dataSetPlus = [selection for selection in self.fp.playerSelections]
+
+
+        # Create a larger data set to train the PlayerBeater
         #dataSetLen = len(self.dataSetPlus)
         #for i in range(dataSetLen):
             #sel = self.dataSetPlus[i]
-            #self.dataSetPlus.append(sel)            
-            #self.dataSetPlus.append(sel)
-            #newSel = self.updateHorizontal(sel)
-            #self.dataSetPlus.append(newSel)
-            #newSel = self.updateHorizontal(newSel)
             #newSel = self.updateHorizontal(sel)
             #newSel = self.updateVertical(sel)
             #self.dataSetPlus.append(newSel)            
 
-        for i in range(3000):
-            sel = self.updateRandom()
-            sel = self.updateDown(sel)
-            self.dataSetPlus.append(sel)
-
-
-        print "game init"
-
-    # Determines which of two players won the most points
+    # Determines which of two selections won the most points
     def compare(self, player1Sel, player2Sel):
 
+        # Check that the selections are valid. Check number of castles proposed and
+        # total number of soldiers used
         if len(player1Sel) > self.numCastles or len(player2Sel) > self.numCastles:
             print "ERROR: Invalid size of betting selections"
             return -1
-        
         if sum(player1Sel) > self.numSoldiers or sum(player2Sel) > self.numSoldiers:
             print "ERROR: Invalid number of soldiers in selections"
             return -1
 
-        player1Score = 0
-        player2Score = 0
 
         # Determine which player wins each castle. If each player has 
         # attacked with the same number of soldiers, castle is won by
         # neither
+        player1Score = 0
+        player2Score = 0
+
+        # Assign each castle score to either player 1 or player 2 depending on
+        # number of soldiers on castle. If tied, neither player gets points
         for i in range(0, self.numCastles):
             if player1Sel[i] > player2Sel[i]:
                 player1Score = player1Score + i + 1
             elif player2Sel[i] > player1Sel[i]:
                 player2Score = player2Score + i + 1
 
+        # Return tuple of scores
         return (player1Score, player2Score)
         
+    # Returns a tuple of the number of wins, ties, and losses that playerSelection
+    # achieves when comapred against every selection in dataSet
     def testSelection(self, playerSelection, dataSet):
         
+        # Keep track of number of wins, ties, and losses
         playerWins = 0
         playerTies = 0
         playerLosses = 0
-        
-        #for selection in self.fp.playerSelections:
+
+        # Loop through all selections
         for selection in dataSet:
 
             (s1, s2) = self.compare(playerSelection, selection)
 
+            # Determine if given selection wins, draws, or loses
             if s1 > s2:
                 playerWins = playerWins + 1
             elif s1 < s2:
@@ -108,6 +109,8 @@ class Game:
                 
         return (playerWins, playerTies, playerLosses)
 
+    # Score-calculating function that takes a tuple of wins, ties, and losses
+    # and assigns appropriate score (3pts for a win, 1 for a tie, 0 for a loss)
     def calcScore(self, wtl):
         return 3 * wtl[0] + wtl[1] 
 
@@ -120,7 +123,7 @@ class Game:
 
         return newSelection
 
-    # Throw mass at the higher scoring castles
+    # Throw mass at the higher value castles
     def updateVertical(self, oppSelection):
         
         selection = self.copySelection(oppSelection)
@@ -131,19 +134,24 @@ class Game:
         while (index < selectionLen - 1) and (selection[index] == 0):
             index = index + 1
         
+        # Decrement the lowest bid and increment the bid on the highest value
+        # castle. Preserves sum
         selection[index] = selection[index] - 1
         selection[selectionLen - 1] = selection[selectionLen - 1] + 1
 
         return selection
 
+    # Remove mass from the highest value castle and spread over all castles
     def updateDown(self, oppSelection):
 
         selection = self.copySelection(oppSelection)
         selectionLen = len(selection)
 
+        # Get bid on highest value castle and set bid to 0
         highestBidOn = selection[selectionLen - 1]
         selection[selectionLen - 1] = 0
-
+        
+        # Redistribute bid over all castles
         for i in range(highestBidOn):
             randPos = random.randrange(selectionLen)
             selection[randPos] = selection[randPos] + 1
@@ -157,7 +165,8 @@ class Game:
         selection = self.copySelection(oppSelection)
         selectionLen = len(selection)
 
-        # Get the index of the first non-zero bet made by opponent
+        # Get the index of the first (lowest) castle with a non-zero bet made 
+        # by opponent
         index = 0
         while (index < selectionLen - 1) and (selection[index] == 0):
             index = index + 1
@@ -168,6 +177,7 @@ class Game:
             if selection[i] == 0:
                 zeroBets.append(i)
 
+        # Edge case where every castle is bet on
         if len(zeroBets) == 0:
             return oppSelection
 
@@ -206,168 +216,94 @@ class Game:
 
         return selection
 
-
-
-class Player:
-    
-    # Initializes a player with a very bad bet selection
-    def __init__(self, game):
-        self.selection = []
-        remaining = game.numSoldiers + 1
-        
-        # Very biased method of filling in bets
-        # Puts a heavy weight for high bets on lower scoring castles
-        for i in range(game.numCastles):
-            nextNum = random.randrange(remaining)
-            self.selection.append(nextNum)
-            remaining = remaining - nextNum
-
-        self.selectionLen = len(self.selection)
-        self.game = game
-
-    # Assign a new selection to the player
-    def copySelection(self, selection):
-        self.selection = []
-
-        for soldiersAtCastle in selection:
-            self.selection.append(soldiersAtCastle)
-
-    def mutate(self):
-
-        p = Player(self.game)
-        p.copySelection(self.selection)
-        
-        numMutations = random.randrange(10)
-
-        for i in range(numMutations + 1):
-            randIndex1 = random.randrange(p.selectionLen)
-            randIndex2 = random.randrange(p.selectionLen)
-            
-            castle1Sel = p.selection[randIndex1]
-            castle2Sel = p.selection[randIndex2]
-            
-            if castle1Sel > 0:
-                p.selection[randIndex1] = p.selection[randIndex1] - 1
-                p.selection[randIndex2] = p.selection[randIndex2] + 1
-
-        return p
-
-        
-
-    # Throw mass at the higher scoring castles
-    def updateVertical(self, oppSelection):
-        
-        self.copySelection(oppSelection)
-        
-        # Get the index of the first non-zero bet made by opponent
-        index = 0
-        while (index < self.selectionLen - 1) and (self.selection[index] == 0):
-            index = index + 1
-        
-        self.selection[index] = self.selection[index] - 1
-        self.selection[self.selectionLen - 1] = self.selection[self.selectionLen - 1] + 1
-
-        return self.selection
-
-    # Throw mass at castles that are not occupied
-    def updateHorizontal(self, oppSelection):
-
-        self.copySelection(oppSelection)
-        
-        # Get the index of the first non-zero bet made by opponent
-        index = 0
-        while (index < self.selectionLen - 1) and (self.selection[index] == 0):
-            index = index + 1
-
-        # Find all castles where bets were not made
-        zeroBets = []
-        for i in range(self.selectionLen):
-            if self.selection[i] == 0:
-                zeroBets.append(i)
-
-        if len(zeroBets) == 0:
-            return 0
-
-        soldiersToDistribute = self.selection[index]
-        self.selection[index] = 0
-
-        # Redistribute soldiers to castles with no soldiers
-        zIndex = 0
-        while soldiersToDistribute > 0:
-            curCastle = zeroBets[zIndex]
-            self.selection[curCastle] = self.selection[curCastle] + 1
-
-            zIndex = zIndex + 1
-            if zIndex >= len(zeroBets):
-                zIndex = 0
-
-            soldiersToDistribute = soldiersToDistribute - 1
-
-        return self.selection
-
-
     # Apply updateVertical() twice
     def updateVerticalWinner(self, oppSelection):
-        newSelection = self.updateVertical(oppSelection)
+        selection = self.copySelection(oppSelection)
+
+        newSelection = self.updateVertical(selection)
+
         self.updateVertical(newSelection)
-        return self.selection
 
-    # Disregards move made by opponent and randomly creates new bet selection
-    def updateRandom(self, oppSelection=None):
-
-        # Very clsoe to creating a list of random numbers that sum to numSoldiers
-        newSelection = [random.randrange(self.game.numSoldiers) for i in range(self.game.numCastles)]
-        s = sum(newSelection)
-        self.selection = [self.game.numSoldiers * i/s for i in newSelection]
-
-        # Need to fix some gaps due to possible rounding error in previous
-        # list comprehension
-        while sum(self.selection) != self.game.numSoldiers:
-            index = random.randrange(self.selectionLen)
-            self.selection[index] = self.selection[index] + 1
-
-        return self.selection
+        return selection
 
     # Bets 0 on the bottom half of the castles and bets the rest on top half
-    def updateRandomPlus(self, oppSelection):
-        zeros = [0] * (self.selectionLen / 2)
+    def updateRandomPlus(self, oppSelection=None):
+
+        selection = self.copySelection(oppSelection)
+        selectionLen = len(selection)
+
+        zeros = [0] * (selectionLen / 2)
         
         # Very clsoe to creating a list of random numbers that sum to numSoldiers
-        newSelection = [random.randrange(self.game.numSoldiers) for i in range(self.game.numCastles / 2)]
+        newSelection = [random.randrange(self.numSoldiers) for i in range(self.numCastles / 2)]
         s = sum(newSelection)
-        newSelection = [self.game.numSoldiers * i/s for i in newSelection]
+        newSelection = [self.numSoldiers * i/s for i in newSelection]
 
-        # Need to fix some gaps due to possible rounding error in previous
-        # list comprehension
+        # Fix gaps due to possible rounding error in previous list comprehension
         while sum(newSelection) != self.game.numSoldiers:
-            index = random.randrange(self.selectionLen / 2)
+            index = random.randrange(selectionLen / 2)
             newSelection[index] = newSelection[index] + 1
 
-        self.selection = zeros + newSelection
+        selection = zeros + newSelection
 
-        while len(self.selection) != self.game.numCastles:
+        # Edge case where selectionLen / 2 rounded down
+        while len(selection) != self.numCastles:
             self.selection = [0] + self.selection
 
         return self.selection
 
+    # Mutates given selection slightly, by decrementing one bet and incrementing
+    # another up to 10 times
+    def mutate(self, oppSelection):
+
+        selection = self.copySelection(oppSelection)
+        selectionLen = len(selection)
+        
+        # Pick a a number in [1,..,10] for number of mutations
+        numMutations = random.randrange(10)
+
+        # Perform numMutations mutations
+        for i in range(numMutations + 1):
+            # Decrement one bid and increment another (these can be the same bid)
+            randIndex1 = random.randrange(selectionLen)
+            randIndex2 = random.randrange(selectionLen)
+            
+            castle1Sel = selection[randIndex1]
+            castle2Sel = selection[randIndex2]
+            
+            if castle1Sel > 0:
+                selection[randIndex1] = selection[randIndex1] - 1
+                selection[randIndex2] = selection[randIndex2] + 1
+
+        return selection
+
+
+# Maintains a list of selections, ranked by their scores. Every time this list
+# is updated, the top third of the list is maintained, another third is composed
+# of mutants of the top third, and the final third is composed of random selections
 class PlayerBeater:
 
+    # Create list of players, using an instance of Game
     def __init__(self, game):
         self.game = game
+
+        # Number of selections per generation
         self.numPlayers = 60
 
         self.players = []
         for i in range(self.numPlayers):
-            player = Player(game)
-            player.updateRandom()
+            player = game.updateRandom()
             self.players.append(player)
 
 
+    # Function that wraps calcScore and testSelection conveniently
     def scorePlayer(self, player):
-        return self.game.calcScore(self.game.testSelection(player.selection, game.dataSetPlus))
+        return self.game.calcScore(self.game.testSelection(player, game.dataSetPlus))
 
-
+    # Creates the next generation from the current one
     def update(self):
+        
+        # Create a list of betting selections and their corresponding scores for ranking
         playersAndScores = [(player, self.scorePlayer(player)) for player in self.players]
         
         # Do a bubble sort, but this needs to be rewritten ASAP
@@ -378,34 +314,37 @@ class PlayerBeater:
                     playersAndScores[j] = playersAndScores[j + 1]
                     playersAndScores[j + 1] = temp
 
+        # Populate a new generation
         newPlayers = []
-        
-        #rankedscores = [score for (player, score) in playersAndScores]
 
+        # Create 3 new selections for every iteration: one original, one mutant,
+        # and one random
         for index in range(self.numPlayers / 3):
+            
+            # Keep the selection from the preceding generation
             newPlayers.append(playersAndScores[index][0])
 
-            randomPlayer = Player(self.game)
-            randomPlayer.updateRandom()
+            # Create a random selection, for variety in the next generation
+            randomPlayer = game.updateRandom()
             newPlayers.append(randomPlayer)
             
-            mutant = playersAndScores[index][0].mutate()
+            # Create a mutant of the betting selection in the previous generation.
+            mutant = game.mutate(playersAndScores[index][0])
 
-            
-            contained = True
-            
-            # Test to see if the mutant's selection already exists in the new generation
+            # Assure this mutant does not already exist in generation
+            contained = True            
             while contained:
                 playerIndex = 0
+                # Loop through all bets in the given selection
                 while playerIndex < len(newPlayers):
-                    
                     player = newPlayers[playerIndex]
                     # Determine if current player has same selection as mutant
-                    # If it does, mutant is alerady contained in new generation
+                    # If it does, mutant is already contained in new generation
                     sameSel = True
-
-                    for castleIndex in range(player.selectionLen):
-                        if player.selection[castleIndex] != mutant.selection[castleIndex]:
+                    selectionLen = len(player)
+                    
+                    for castleIndex in range(selectionLen):
+                        if player[castleIndex] != mutant[castleIndex]:
                             sameSel = False
 
                     # Found a creature with the same selection
@@ -413,135 +352,76 @@ class PlayerBeater:
                         break
                             
                     playerIndex = playerIndex + 1
-                        
+                
+                # Contained is false if every selection in the new generation iss
+                # a different selection from the mutant (aka we reach the end of
+                # our lsit without finding a match)
                 contained = not (playerIndex == len(newPlayers))
-                mutant = mutant.mutate()
+                mutant = game.mutate(mutant)
             
             newPlayers.append(mutant)                
 
         self.players = newPlayers
 
-
-
+# Reads in the given file and creates a list of betting selections from the data
 class FileParser:
 
+    # Initialize file name and an empty list of selections. An instance of game is
+    # needed to determine the number of castles used in the data set
     def __init__(self, fileName, game):
         self.fileName = fileName
         self.playerSelections = []
         self.game = game
 
+    # Reads file with name fileName and populates the playerSelections list with
+    # selections from the data set
     def readFile(self):
+        # Open file
         toRead = open(self.fileName)
-        
+
+        # Increment when a line is read from file
         lineNum = 0
         for line in toRead:
+            # First line (lineNum 0) is a header line with category information.
+            # We omit this line
             if lineNum != 0:
-                player = Player(self.game)
                 
+                # Get only the first numCastles entries in each selection,
+                # entries[len(entries) - 1] is an explanation made to explain betting
+                # selection to the 538 competition
                 entries = line.split(",")
                 entries = [entries[index] for index in range(0, self.game.numCastles)]
                 
+                # Convert Strings to ints
                 curSelection = [int(s) for s in entries]
                 
                 self.playerSelections.append(curSelection)
                 
             lineNum = lineNum + 1
 
-            
-
+        # Close file
         toRead.close()
 
     
 
-'''
-# Keep track of number of trials won by player1, player2, and the number that
-# ended in a draw
-p1TrialWins = 0
-p2TrialWins = 0
-draws = 0
+# Script to find seleciton that wins the 538 competition
 
-for numExp in range(0, 100):
-    # Perform the desired number of experiments(trials)
-
-    g = Game()
-
-    # Scores within each trial
-    pScore1 = 0
-    pScore2 = 0
-
-    # Create new players for the trial
-    player1 = Player(g)
-    player2 = Player(g)
-
-    for numTrial in range(0, 100):
-        # Perform the desired number of games within a trial
-        
-        # Create copies of the bet selections for both players
-        p1Sel = []
-        p2Sel = []
-        for index in range(len(player1.selection)):
-            p1Sel.append(player1.selection[index])
-            p2Sel.append(player2.selection[index])
-
-
-            
-        # Compare the bets of the two players to see who wins the game
-        (s1, s2) = g.compare(p1Sel, p2Sel)
-        if s1 > s2:
-            # Player 1 wins the game
-            pScore1 = pScore1 + 1 
-        elif s2 > s1:
-            # Player 2 wins the game
-            pScore2 = pScore2 + 1 
-            player1.updateHorizontal(p2Sel)
-            
-
-
-        #player1.updateRandomPlus(p2Sel)
-        #player1.updateHorizontal(p2Sel)
-        player2.updateRandomPlus(p1Sel)
-
-
-
-    #print("Player 1 final selection: " + str(player1.selection))
-    if pScore1 > pScore2:
-        # Player 1 wins the most games in the trial
-        p1TrialWins = p1TrialWins + 1
-    elif pScore2 > pScore1:
-        # Player 2 wins the most games in the trial
-        p2TrialWins = p2TrialWins + 1        
-    else:
-        # Both players won the same number of games in the trial
-        draws = draws + 1
-
-    print( "Player 1 wins: " + str(pScore1) + " Player 2 wins: " + str(pScore2)) 
-
-
-# Print relevant information for the results of the experiments
-print "\n"
-print "Player 1 won in " + str(p1TrialWins) + " trials."
-print "Player 2 won in " + str(p2TrialWins) + " trials."
-print "Draws in " + str(draws) + " trials."
-print "\n"
-
-
-'''
-'''
-g = Game()
-player1 = Player(g)
-player2 = Player(g)
-
-print str(player1.selection)
-player1.updateRandom(player2.selection)
-print str(player1.selection)
-'''
-
+# Instantiate Game and PlayerBeater
 game = Game()
 pb = PlayerBeater(game)
+
+# Run 1000 generations of pb
 for i in range(1000):
-    print str(i)
-    pb.update()
     
+    # Print generation number
+    print str("Gen: " + str(i))
+    # Create new generation of betting selections
+    pb.update()
+
+
+    # Commented code to add the best selection to a growing data set
+    # in an attempt to expand data set during training
+    '''
     newSel = pb.players[0].selection
 
     if i < 500:
@@ -550,23 +430,18 @@ for i in range(1000):
             newSel = game.updateVertical(newSel)
         
         game.dataSetPlus.append(pb.players[0].selection)
-        
-    bestSelection = pb.players[0].selection
-    print "Best Selection: " + str(bestSelection)
+    '''
+
     
-    '''
-    pbPlayersLen = len(pb.players)
-
-    for selIndex in range(pbPlayersLen / 12):
-        curSel = pb.players[selIndex].selection
-        if curSel not in game.dataSetPlus:
-            game.dataSetPlus.append(curSel)
-    '''
-
+    # Print relevant information for each generation, with selections tested
+    # on dataSetPlus, rather than just the original data
+    bestSelection = pb.players[0]
+    print "Best Selection: " + str(bestSelection)    
     bestPerformance = game.testSelection(bestSelection, game.dataSetPlus)
     print "Best Performance: " + str(bestPerformance)
     print "Best Score: " + str(game.calcScore(bestPerformance))
 
+# The final best selection's performance, as evaluated on the original data set
 bestSelection = pb.players[0].selection
 print "Best Selection: " + str(bestSelection)
 bestPerformance = game.testSelection(bestSelection, game.fp.playerSelections)
